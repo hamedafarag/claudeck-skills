@@ -34,6 +34,37 @@ To resolve the user plugins directory, use `~/.claudeck/plugins/` (or `$CLAUDECK
 5. If the plugin needs server-side API routes, also create `server.js` (for user plugins, requires `CLAUDECK_USER_SERVER_PLUGINS=true` in `~/.claudeck/.env`)
 6. If the plugin needs persistent config, also create `config.json` (auto-copied to `~/.claudeck/config/` on first run)
 
+## manifest.json (required)
+
+Create `manifest.json` in the plugin directory:
+
+```json
+{
+  "id": "<name>",
+  "name": "<Title>",
+  "version": "1.0.0",
+  "description": "<Short description — max 120 chars>",
+  "author": "<github-username>",
+  "icon": "<emoji>",
+  "hasServer": false,
+  "minClaudeckVersion": "1.4.1"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Lowercase alphanumeric + hyphens only (`^[a-z0-9-]+$`). Must match directory name. |
+| `name` | string | Yes | Human-readable plugin name |
+| `version` | string | Yes | Semantic version (e.g. `1.0.0`) |
+| `description` | string | Yes | Short description shown in marketplace (max 120 chars) |
+| `author` | string | Yes | Author name or GitHub username |
+| `icon` | string | No | Emoji or short SVG string |
+| `hasServer` | boolean | No | Set `true` if plugin includes `server.js`. Default `false`. |
+| `minClaudeckVersion` | string | No | Minimum Claudeck version required (e.g. `1.4.1`) |
+| `homepage` | string | No | URL to plugin docs or repo |
+| `keywords` | array | No | Search keywords (array of strings) |
+| `authorGithub` | string | No | Author's GitHub username (used for profile link in marketplace) |
+
 ## Client JS file template
 
 Create `client.js` in the plugin directory following this structure:
@@ -126,11 +157,11 @@ The `ctx` object passed to `init()` and all lifecycle hooks:
 | `ctx.getProjectPath()` | Current project path (string, may be `''` if none selected) |
 | `ctx.getSessionId()` | Current session ID (string or `null`) |
 | `ctx.getTheme()` | Current theme: `'dark'` or `'light'` |
-| `ctx.storage.get(key)` | Read from plugin-scoped localStorage (auto-namespaced) |
+| `ctx.storage.get(key)` | Read from plugin-scoped localStorage (namespaced to `claudeck-plugin-{id}-{key}`) |
 | `ctx.storage.set(key, value)` | Write to plugin-scoped localStorage |
 | `ctx.storage.remove(key)` | Remove from plugin-scoped localStorage |
 | `ctx.toast(msg, opts)` | Show notification. `opts: {duration, type}` where type is `'info'`, `'success'`, or `'error'` |
-| `ctx.showBadge(count)` | Show a number badge on the tab button |
+| `ctx.showBadge(count)` | Show a number badge on the tab button. Pass `0` to hide. |
 | `ctx.clearBadge()` | Hide the badge |
 | `ctx.setTitle(text)` | Update the tab button label at runtime |
 | `ctx.dispose()` | Unsubscribe all event/state listeners (auto-called on destroy) |
@@ -143,7 +174,7 @@ Subscribe via `ctx.on(event, fn)`:
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `ws:message` | `msg` (object) | Every WebSocket message — streaming text, tool calls, results, errors, completion |
+| `ws:message` | `msg` (object) | Every WebSocket message — see [message types](#wsmessage-types) below |
 | `ws:connected` | — | WebSocket first connected |
 | `ws:reconnected` | — | WebSocket reconnected after drop |
 | `ws:disconnected` | — | WebSocket connection lost |
@@ -154,6 +185,22 @@ Subscribe via `ctx.on(event, fn)`:
 **Most useful:** `ws:message` (react to live streaming/tool calls), `projectChanged` (reload data on project switch).
 
 **Note:** Use `ctx.on` for events (things that *happen*), use `ctx.onState` for state (values that *change*).
+
+### ws:message Types
+
+The `msg` object from `ws:message` has a `type` field:
+
+| Type | Description | Key Fields |
+|------|-------------|------------|
+| `session` | New session created | `msg.sessionId` |
+| `text` | Streaming text chunk | `msg.text` |
+| `tool` | Tool call started | `msg.name`, `msg.input` |
+| `tool_result` | Tool call finished | `msg.content`, `msg.isError` |
+| `result` | Query completed | `msg.text` |
+| `done` | Session finished | — |
+| `error` | Error occurred | `msg.error` |
+| `aborted` | User aborted | — |
+| `permission_request` | Tool needs approval | `msg.tool`, `msg.input` |
 
 ### Available State Keys
 
@@ -172,6 +219,7 @@ Read via `ctx.getState(key)`, subscribe via `ctx.onState(key, fn)`:
 | `ws` | WebSocket \| null | The live WebSocket instance |
 | `streamingCharCount` | number | Characters received in current stream |
 | `notificationsEnabled` | boolean | Whether browser notifications are on |
+| `attachedFiles` | array | Files attached to current message |
 
 **Most useful:** `sessionId` (reload data on session switch), `projectsData` (know when projects are loaded).
 
@@ -257,7 +305,7 @@ Use these CSS custom properties from the app theme:
 - `var(--purple)`, `var(--user)`, `var(--cyan)`, `var(--amber)` — additional accents
 
 **Backgrounds:**
-- `var(--bg)`, `var(--bg-secondary)`, `var(--bg-tertiary)` — background hierarchy
+- `var(--bg)`, `var(--bg-secondary)`, `var(--bg-tertiary)`, `var(--bg-elevated)` — background hierarchy
 
 **Borders:**
 - `var(--border)`, `var(--border-subtle)` — border colors
